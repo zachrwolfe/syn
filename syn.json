@@ -696,6 +696,11 @@
             "syn": "ExprParen"
           }
         ],
+        "PartialBorrow": [
+          {
+            "syn": "ExprPartialBorrow"
+          }
+        ],
         "Path": [
           {
             "syn": "ExprPath"
@@ -1491,6 +1496,32 @@
           "box": {
             "syn": "Expr"
           }
+        }
+      }
+    },
+    {
+      "ident": "ExprPartialBorrow",
+      "features": {
+        "any": [
+          "full"
+        ]
+      },
+      "fields": {
+        "attrs": {
+          "vec": {
+            "syn": "Attribute"
+          }
+        },
+        "base": {
+          "box": {
+            "syn": "Expr"
+          }
+        },
+        "dot_token": {
+          "token": "Dot"
+        },
+        "borrows": {
+          "syn": "PartialBorrows"
         }
       }
     },
@@ -3679,6 +3710,45 @@
       }
     },
     {
+      "ident": "PartialBorrow",
+      "features": {
+        "any": [
+          "full"
+        ]
+      },
+      "fields": {
+        "mutability": {
+          "option": {
+            "token": "Mut"
+          }
+        },
+        "ident": {
+          "proc_macro2": "Ident"
+        }
+      }
+    },
+    {
+      "ident": "PartialBorrows",
+      "features": {
+        "any": [
+          "full"
+        ]
+      },
+      "fields": {
+        "brace_token": {
+          "group": "Brace"
+        },
+        "borrows": {
+          "punctuated": {
+            "element": {
+              "syn": "PartialBorrow"
+            },
+            "punct": "Comma"
+          }
+        }
+      }
+    },
+    {
       "ident": "Pat",
       "features": {
         "any": [
@@ -4352,27 +4422,51 @@
           }
         },
         "reference": {
-          "option": {
-            "tuple": [
-              {
-                "token": "And"
-              },
-              {
-                "option": {
-                  "syn": "Lifetime"
-                }
-              }
-            ]
-          }
-        },
-        "mutability": {
-          "option": {
-            "token": "Mut"
-          }
+          "syn": "Reference"
         },
         "self_token": {
           "token": "SelfValue"
         }
+      }
+    },
+    {
+      "ident": "Reference",
+      "features": {
+        "any": [
+          "full"
+        ]
+      },
+      "variants": {
+        "None": [
+          {
+            "option": {
+              "token": "Mut"
+            }
+          }
+        ],
+        "Partial": [
+          {
+            "token": "Dot"
+          },
+          {
+            "syn": "PartialBorrows"
+          }
+        ],
+        "Full": [
+          {
+            "token": "And"
+          },
+          {
+            "option": {
+              "syn": "Lifetime"
+            }
+          },
+          {
+            "option": {
+              "token": "Mut"
+            }
+          }
+        ]
       }
     },
     {

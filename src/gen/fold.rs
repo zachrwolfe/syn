@@ -203,6 +203,10 @@ pub trait Fold {
     fn fold_expr_paren(&mut self, i: ExprParen) -> ExprParen {
         fold_expr_paren(self, i)
     }
+    #[cfg(feature = "full")]
+    fn fold_expr_partial_borrow(&mut self, i: ExprPartialBorrow) -> ExprPartialBorrow {
+        fold_expr_partial_borrow(self, i)
+    }
     #[cfg(any(feature = "derive", feature = "full"))]
     fn fold_expr_path(&mut self, i: ExprPath) -> ExprPath {
         fold_expr_path(self, i)
@@ -509,6 +513,14 @@ pub trait Fold {
         fold_parenthesized_generic_arguments(self, i)
     }
     #[cfg(feature = "full")]
+    fn fold_partial_borrow(&mut self, i: PartialBorrow) -> PartialBorrow {
+        fold_partial_borrow(self, i)
+    }
+    #[cfg(feature = "full")]
+    fn fold_partial_borrows(&mut self, i: PartialBorrows) -> PartialBorrows {
+        fold_partial_borrows(self, i)
+    }
+    #[cfg(feature = "full")]
     fn fold_pat(&mut self, i: Pat) -> Pat {
         fold_pat(self, i)
     }
@@ -607,6 +619,10 @@ pub trait Fold {
     #[cfg(feature = "full")]
     fn fold_receiver(&mut self, i: Receiver) -> Receiver {
         fold_receiver(self, i)
+    }
+    #[cfg(feature = "full")]
+    fn fold_reference(&mut self, i: Reference) -> Reference {
+        fold_reference(self, i)
     }
     #[cfg(any(feature = "derive", feature = "full"))]
     fn fold_return_type(&mut self, i: ReturnType) -> ReturnType {
@@ -1075,6 +1091,9 @@ where
             Expr::MethodCall(full!(f.fold_expr_method_call(_binding_0)))
         }
         Expr::Paren(_binding_0) => Expr::Paren(f.fold_expr_paren(_binding_0)),
+        Expr::PartialBorrow(_binding_0) => {
+            Expr::PartialBorrow(full!(f.fold_expr_partial_borrow(_binding_0)))
+        }
         Expr::Path(_binding_0) => Expr::Path(f.fold_expr_path(_binding_0)),
         Expr::Range(_binding_0) => Expr::Range(full!(f.fold_expr_range(_binding_0))),
         Expr::Reference(_binding_0) => Expr::Reference(full!(f.fold_expr_reference(_binding_0))),
@@ -1400,6 +1419,18 @@ where
         attrs: FoldHelper::lift(node.attrs, |it| f.fold_attribute(it)),
         paren_token: Paren(tokens_helper(f, &node.paren_token.span)),
         expr: Box::new(f.fold_expr(*node.expr)),
+    }
+}
+#[cfg(feature = "full")]
+pub fn fold_expr_partial_borrow<F>(f: &mut F, node: ExprPartialBorrow) -> ExprPartialBorrow
+where
+    F: Fold + ?Sized,
+{
+    ExprPartialBorrow {
+        attrs: FoldHelper::lift(node.attrs, |it| f.fold_attribute(it)),
+        base: Box::new(f.fold_expr(*node.base)),
+        dot_token: Token ! [ . ](tokens_helper(f, &node.dot_token.spans)),
+        borrows: f.fold_partial_borrows(node.borrows),
     }
 }
 #[cfg(any(feature = "derive", feature = "full"))]
@@ -2402,6 +2433,26 @@ where
     }
 }
 #[cfg(feature = "full")]
+pub fn fold_partial_borrow<F>(f: &mut F, node: PartialBorrow) -> PartialBorrow
+where
+    F: Fold + ?Sized,
+{
+    PartialBorrow {
+        mutability: (node.mutability).map(|it| Token![mut](tokens_helper(f, &it.span))),
+        ident: f.fold_ident(node.ident),
+    }
+}
+#[cfg(feature = "full")]
+pub fn fold_partial_borrows<F>(f: &mut F, node: PartialBorrows) -> PartialBorrows
+where
+    F: Fold + ?Sized,
+{
+    PartialBorrows {
+        brace_token: Brace(tokens_helper(f, &node.brace_token.span)),
+        borrows: FoldHelper::lift(node.borrows, |it| f.fold_partial_borrow(it)),
+    }
+}
+#[cfg(feature = "full")]
 pub fn fold_pat<F>(f: &mut F, node: Pat) -> Pat
 where
     F: Fold + ?Sized,
@@ -2702,14 +2753,28 @@ where
 {
     Receiver {
         attrs: FoldHelper::lift(node.attrs, |it| f.fold_attribute(it)),
-        reference: (node.reference).map(|it| {
-            (
-                Token ! [ & ](tokens_helper(f, &(it).0.spans)),
-                ((it).1).map(|it| f.fold_lifetime(it)),
-            )
-        }),
-        mutability: (node.mutability).map(|it| Token![mut](tokens_helper(f, &it.span))),
+        reference: f.fold_reference(node.reference),
         self_token: Token![self](tokens_helper(f, &node.self_token.span)),
+    }
+}
+#[cfg(feature = "full")]
+pub fn fold_reference<F>(f: &mut F, node: Reference) -> Reference
+where
+    F: Fold + ?Sized,
+{
+    match node {
+        Reference::None(_binding_0) => {
+            Reference::None((_binding_0).map(|it| Token![mut](tokens_helper(f, &it.span))))
+        }
+        Reference::Partial(_binding_0, _binding_1) => Reference::Partial(
+            Token ! [ . ](tokens_helper(f, &_binding_0.spans)),
+            f.fold_partial_borrows(_binding_1),
+        ),
+        Reference::Full(_binding_0, _binding_1, _binding_2) => Reference::Full(
+            Token ! [ & ](tokens_helper(f, &_binding_0.spans)),
+            (_binding_1).map(|it| f.fold_lifetime(it)),
+            (_binding_2).map(|it| Token![mut](tokens_helper(f, &it.span))),
+        ),
     }
 }
 #[cfg(any(feature = "derive", feature = "full"))]

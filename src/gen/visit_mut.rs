@@ -208,6 +208,10 @@ pub trait VisitMut {
     fn visit_expr_paren_mut(&mut self, i: &mut ExprParen) {
         visit_expr_paren_mut(self, i)
     }
+    #[cfg(feature = "full")]
+    fn visit_expr_partial_borrow_mut(&mut self, i: &mut ExprPartialBorrow) {
+        visit_expr_partial_borrow_mut(self, i)
+    }
     #[cfg(any(feature = "derive", feature = "full"))]
     fn visit_expr_path_mut(&mut self, i: &mut ExprPath) {
         visit_expr_path_mut(self, i)
@@ -511,6 +515,14 @@ pub trait VisitMut {
         visit_parenthesized_generic_arguments_mut(self, i)
     }
     #[cfg(feature = "full")]
+    fn visit_partial_borrow_mut(&mut self, i: &mut PartialBorrow) {
+        visit_partial_borrow_mut(self, i)
+    }
+    #[cfg(feature = "full")]
+    fn visit_partial_borrows_mut(&mut self, i: &mut PartialBorrows) {
+        visit_partial_borrows_mut(self, i)
+    }
+    #[cfg(feature = "full")]
     fn visit_pat_mut(&mut self, i: &mut Pat) {
         visit_pat_mut(self, i)
     }
@@ -609,6 +621,10 @@ pub trait VisitMut {
     #[cfg(feature = "full")]
     fn visit_receiver_mut(&mut self, i: &mut Receiver) {
         visit_receiver_mut(self, i)
+    }
+    #[cfg(feature = "full")]
+    fn visit_reference_mut(&mut self, i: &mut Reference) {
+        visit_reference_mut(self, i)
     }
     #[cfg(any(feature = "derive", feature = "full"))]
     fn visit_return_type_mut(&mut self, i: &mut ReturnType) {
@@ -1174,6 +1190,9 @@ where
         Expr::Paren(_binding_0) => {
             v.visit_expr_paren_mut(_binding_0);
         }
+        Expr::PartialBorrow(_binding_0) => {
+            full!(v.visit_expr_partial_borrow_mut(_binding_0));
+        }
         Expr::Path(_binding_0) => {
             v.visit_expr_path_mut(_binding_0);
         }
@@ -1576,6 +1595,18 @@ where
     }
     tokens_helper(v, &mut node.paren_token.span);
     v.visit_expr_mut(&mut *node.expr);
+}
+#[cfg(feature = "full")]
+pub fn visit_expr_partial_borrow_mut<V>(v: &mut V, node: &mut ExprPartialBorrow)
+where
+    V: VisitMut + ?Sized,
+{
+    for it in &mut node.attrs {
+        v.visit_attribute_mut(it)
+    }
+    v.visit_expr_mut(&mut *node.base);
+    tokens_helper(v, &mut node.dot_token.spans);
+    v.visit_partial_borrows_mut(&mut node.borrows);
 }
 #[cfg(any(feature = "derive", feature = "full"))]
 pub fn visit_expr_path_mut<V>(v: &mut V, node: &mut ExprPath)
@@ -2765,6 +2796,30 @@ pub fn visit_parenthesized_generic_arguments_mut<V>(
     v.visit_return_type_mut(&mut node.output);
 }
 #[cfg(feature = "full")]
+pub fn visit_partial_borrow_mut<V>(v: &mut V, node: &mut PartialBorrow)
+where
+    V: VisitMut + ?Sized,
+{
+    if let Some(it) = &mut node.mutability {
+        tokens_helper(v, &mut it.span)
+    };
+    v.visit_ident_mut(&mut node.ident);
+}
+#[cfg(feature = "full")]
+pub fn visit_partial_borrows_mut<V>(v: &mut V, node: &mut PartialBorrows)
+where
+    V: VisitMut + ?Sized,
+{
+    tokens_helper(v, &mut node.brace_token.span);
+    for el in Punctuated::pairs_mut(&mut node.borrows) {
+        let (it, p) = el.into_tuple();
+        v.visit_partial_borrow_mut(it);
+        if let Some(p) = p {
+            tokens_helper(v, &mut p.spans);
+        }
+    }
+}
+#[cfg(feature = "full")]
 pub fn visit_pat_mut<V>(v: &mut V, node: &mut Pat)
 where
     V: VisitMut + ?Sized,
@@ -3144,16 +3199,34 @@ where
     for it in &mut node.attrs {
         v.visit_attribute_mut(it)
     }
-    if let Some(it) = &mut node.reference {
-        tokens_helper(v, &mut (it).0.spans);
-        if let Some(it) = &mut (it).1 {
-            v.visit_lifetime_mut(it)
-        };
-    };
-    if let Some(it) = &mut node.mutability {
-        tokens_helper(v, &mut it.span)
-    };
+    v.visit_reference_mut(&mut node.reference);
     tokens_helper(v, &mut node.self_token.span);
+}
+#[cfg(feature = "full")]
+pub fn visit_reference_mut<V>(v: &mut V, node: &mut Reference)
+where
+    V: VisitMut + ?Sized,
+{
+    match node {
+        Reference::None(_binding_0) => {
+            if let Some(it) = &mut *_binding_0 {
+                tokens_helper(v, &mut it.span)
+            };
+        }
+        Reference::Partial(_binding_0, _binding_1) => {
+            tokens_helper(v, &mut _binding_0.spans);
+            v.visit_partial_borrows_mut(_binding_1);
+        }
+        Reference::Full(_binding_0, _binding_1, _binding_2) => {
+            tokens_helper(v, &mut _binding_0.spans);
+            if let Some(it) = &mut *_binding_1 {
+                v.visit_lifetime_mut(it)
+            };
+            if let Some(it) = &mut *_binding_2 {
+                tokens_helper(v, &mut it.span)
+            };
+        }
+    }
 }
 #[cfg(any(feature = "derive", feature = "full"))]
 pub fn visit_return_type_mut<V>(v: &mut V, node: &mut ReturnType)

@@ -950,6 +950,10 @@ impl Hash for Expr {
                 hash.write_u8(39);
                 expr.hash(hash);
             }
+            Expr::PartialBorrow(expr) => {
+                hash.write_u8(40);
+                expr.hash(hash);
+            }
             Expr::__Nonexhaustive => unreachable!(),
         }
     }
