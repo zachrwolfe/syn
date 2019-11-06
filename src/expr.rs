@@ -169,6 +169,9 @@ ast_enum_of_structs! {
         /// A parenthesized expression: `(a + b)`.
         Paren(ExprParen),
 
+        /// A partial borrow expression: `x.{a, mut b}`
+        PartialBorrow(ExprPartialBorrow),
+
         /// A path like `std::mem::replace` possibly containing generic
         /// parameters and a qualified self-type.
         ///
@@ -541,6 +544,15 @@ ast_struct! {
         pub attrs: Vec<Attribute>,
         pub paren_token: token::Paren,
         pub expr: Box<Expr>,
+    }
+}
+
+ast_struct! {
+    pub struct ExprPartialBorrow #full {
+        pub attrs: Vec<Attribute>,
+        pub base: Box<Expr>,
+        pub dot_token: Token![.],
+        pub borrows: PartialBorrows,
     }
 }
 
@@ -980,6 +992,7 @@ impl Expr {
             | Expr::Struct(ExprStruct { attrs, .. })
             | Expr::Repeat(ExprRepeat { attrs, .. })
             | Expr::Paren(ExprParen { attrs, .. })
+            | Expr::PartialBorrow(ExprPartialBorrow { attrs, .. })
             | Expr::Group(ExprGroup { attrs, .. })
             | Expr::Try(ExprTry { attrs, .. })
             | Expr::Async(ExprAsync { attrs, .. })
@@ -1531,6 +1544,14 @@ pub(crate) mod parsing {
                         base: Box::new(e),
                         dot_token,
                         await_token: input.parse()?,
+                    });
+                    continue;
+                } else if input.peek(token::Brace) {
+                    e = Expr::PartialBorrow(ExprPartialBorrow {
+                        attrs: Vec::new(),
+                        base: Box::new(e),
+                        dot_token,
+                        borrows: input.parse()?,
                     });
                     continue;
                 }
@@ -2170,6 +2191,7 @@ pub(crate) mod parsing {
         ExprStruct, Struct, "expected struct literal expression",
         ExprRepeat, Repeat, "expected array literal constructed from one repeated element",
         ExprParen, Paren, "expected parenthesized expression",
+        ExprPartialBorrow, PartialBorrow, "Expected partial borrow operation",
         ExprTry, Try, "expected try expression",
         ExprAsync, Async, "expected async block",
         ExprTryBlock, TryBlock, "expected try block",
@@ -3167,6 +3189,16 @@ pub(crate) mod printing {
                 inner_attrs_to_tokens(&self.attrs, tokens);
                 self.expr.to_tokens(tokens);
             });
+        }
+    }
+
+    #[cfg(feature = "full")]
+    impl ToTokens for ExprPartialBorrow {
+        fn to_tokens(&self, tokens: &mut TokenStream) {
+            outer_attrs_to_tokens(&self.attrs, tokens);
+            self.base.to_tokens(tokens);
+            self.dot_token.to_tokens(tokens);
+            self.borrows.to_tokens(tokens);
         }
     }
 
