@@ -1,6 +1,7 @@
 use super::*;
 use crate::derive::{Data, DataEnum, DataStruct, DataUnion, DeriveInput};
 use crate::punctuated::Punctuated;
+use crate::partial_borrows::PartialBorrows;
 use proc_macro2::TokenStream;
 
 #[cfg(feature = "extra-traits")]
@@ -1099,6 +1100,14 @@ ast_enum_of_structs! {
     }
 }
 
+ast_enum! {
+    pub enum Reference {
+        None(Option<Token![mut]>),
+        Partial(Token![.], PartialBorrows),
+        Full(Token![&], Option<Lifetime>, Option<Token![mut]>),
+    }
+}
+
 ast_struct! {
     /// The `self` argument of an associated method, whether taken by value
     /// or by reference.
@@ -1109,15 +1118,8 @@ ast_struct! {
     /// *This type is available if Syn is built with the `"full"` feature.*
     pub struct Receiver {
         pub attrs: Vec<Attribute>,
-        pub reference: Option<(Token![&], Option<Lifetime>)>,
-        pub mutability: Option<Token![mut]>,
+        pub reference: Reference,
         pub self_token: Token![self],
-    }
-}
-
-impl Receiver {
-    pub fn lifetime(&self) -> Option<&Lifetime> {
-        self.reference.as_ref()?.1.as_ref()
     }
 }
 
@@ -1547,18 +1549,33 @@ pub mod parsing {
 
     impl Parse for Receiver {
         fn parse(input: ParseStream) -> Result<Self> {
-            Ok(Receiver {
-                attrs: Vec::new(),
-                reference: {
-                    if input.peek(Token![&]) {
-                        Some((input.parse()?, input.parse()?))
-                    } else {
-                        None
-                    }
-                },
-                mutability: input.parse()?,
-                self_token: input.parse()?,
-            })
+            let reference;
+            let self_token;
+            let lookahead = input.lookahead1();
+            if lookahead.peek(Token![mut]) {
+                reference = Reference::None(input.parse()?);
+                self_token = input.parse()?;
+            } else if lookahead.peek(Token![&]) {
+                reference = Reference::Full(
+                    input.parse()?,
+                    input.parse()?,
+                    input.parse()?,
+                );
+                self_token = input.parse()?;
+            } else if lookahead.peek(Token![self]) {
+                self_token = input.parse()?;
+                reference = if input.peek(Token![.]) {
+                    Reference::Partial(
+                        input.parse()?,
+                        input.parse()?,
+                    )
+                } else {
+                    Reference::None(None)
+                };
+            } else {
+                return Err(lookahead.error());
+            }
+            Ok(Receiver { attrs: Vec::new(), reference, self_token })
         }
     }
 
@@ -3037,12 +3054,23 @@ mod printing {
     impl ToTokens for Receiver {
         fn to_tokens(&self, tokens: &mut TokenStream) {
             tokens.append_all(self.attrs.outer());
-            if let Some((ampersand, lifetime)) = &self.reference {
-                ampersand.to_tokens(tokens);
-                lifetime.to_tokens(tokens);
+            match &self.reference {
+                Reference::None(mutability) => {
+                    mutability.to_tokens(tokens);
+                    self.self_token.to_tokens(tokens);
+                },
+                Reference::Partial(dot, partial_borrows) => {
+                    self.self_token.to_tokens(tokens);
+                    dot.to_tokens(tokens);
+                    partial_borrows.to_tokens(tokens);
+                },
+                Reference::Full(ampersand, lifetime, mutability) => {
+                    ampersand.to_tokens(tokens);
+                    lifetime.to_tokens(tokens);
+                    mutability.to_tokens(tokens);
+                    self.self_token.to_tokens(tokens);
+                }
             }
-            self.mutability.to_tokens(tokens);
-            self.self_token.to_tokens(tokens);
         }
     }
 }

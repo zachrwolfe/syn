@@ -355,9 +355,14 @@ pub use crate::item::{
     ImplItem, ImplItemConst, ImplItemMacro, ImplItemMethod, ImplItemType, Item, ItemConst,
     ItemEnum, ItemExternCrate, ItemFn, ItemForeignMod, ItemImpl, ItemMacro, ItemMacro2, ItemMod,
     ItemStatic, ItemStruct, ItemTrait, ItemTraitAlias, ItemType, ItemUnion, ItemUse, Receiver,
-    Signature, TraitItem, TraitItemConst, TraitItemMacro, TraitItemMethod, TraitItemType, UseGlob,
-    UseGroup, UseName, UsePath, UseRename, UseTree,
+    Reference, Signature, TraitItem, TraitItemConst, TraitItemMacro, TraitItemMethod,
+    TraitItemType, UseGlob, UseGroup, UseName, UsePath, UseRename, UseTree,
 };
+
+#[cfg(feature = "full")]
+mod partial_borrows;
+#[cfg(feature = "full")]
+pub use crate::partial_borrows::{PartialBorrow, PartialBorrows};
 
 #[cfg(feature = "full")]
 mod file;
